@@ -6,54 +6,22 @@ import docx
 from docx import Document, document
 from tqdm import tqdm
 import subprocess
-import whisper
-import librosa
-
 
 #[Define]
 ##define variable
 input_path = "input" 
 output_path = "output" 
 total_paragraphs = ""
-audio_length=""
-audio_xverify= False
 LLm_model = []
 ##define api
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 ##define function
-###progressbar related function
-def audio_length_counter(input_path):
-     #Gets the duration of an MP3 file in seconds.
-         try:
-            file_path=mp3_path_outputer(input_path)
-            y, sr = librosa.load(file_path)
-            duration = len(y) / sr
-            return duration
-         except Exception as e:
-            print(f"Error processing {file_path}: {e}")
-            return None
 def line_counter(input_doc,head_style,head_content):
     for i, paragraph in enumerate(input_doc.paragraphs): # Use enumerate for index and value
         if paragraph.style.name == head_style and head_content in paragraph.text:  
             return i
             # Stop searching once the heading is found
             break    
-def progress_bar_counter(input_path):
-    ###input the doc file
-    file_path = docx_path_outputer(input_path)
-    doc = Document(file_path)
-    ###make varrible int
-    head_possition = 0
-    end_possition = 0
-    ###find both possition
-    head_possition = line_counter(doc,'Heading 2','$$Content')
-    end_possition = line_counter(doc,'Heading 2','$$Annotation')
-    ###caculate and error checking
-    i = end_possition - head_possition - 1
-    return i
-    if i <= 0:
-        print("\033[31m[Progress bar error]\033[0m progress bar might be inaccurate due to the fromat of file") 
-###incharge of file path&name
 def docx_name_getter(input_path):
     docx_files = [os.path.basename(file) for file in os.listdir(input_path) if file.endswith(".docx")] 
     if docx_files:
@@ -66,13 +34,6 @@ def docx_path_outputer(input_path):
      if input_filepath:
        for file_path in input_filepath:
            return file_path
-def mp3_path_outputer(input_path):
-    #find all .mp3 files in the input folder
-     input_filepath = [os.path.join(input_path, file) for file in os.listdir(input_path) if file.endswith(".mp3")] 
-     if input_filepath:
-       for file_path in input_filepath:
-           return file_path
-###ollama related function
 def ollama_translate(text):
     #use to tell llm what they should do
     # construct json payload
@@ -96,6 +57,21 @@ def ollama_translate(text):
                     break
         # return full translation
         return response_text.strip()
+def progress_bar_counter(input_path):
+    ###input the doc file
+    file_path = docx_path_outputer(input_path)
+    doc = Document(file_path)
+    ###make varrible int
+    head_possition = 0
+    end_possition = 0
+    ###find both possition
+    head_possition = line_counter(doc,'Heading 2','$$Content')
+    end_possition = line_counter(doc,'Heading 2','$$Annotation')
+    ###caculate and error checking
+    i = end_possition - head_possition - 1
+    return i
+    if i <= 0:
+        print("\033[31m[Progress bar error]\033[0m progress bar might be inaccurate due to the fromat of file") 
 def ollama_list():
  # Execute the "ollama list" command and capture its output and wake ollama
  #subprocess.run(["ollama", "serve"], capture_output=True, text=True)
@@ -139,42 +115,6 @@ def docx_files_indicator(input_path):
   else:
         print("\033[31m[No docx files found]\033[0m")
         exit()
-def audio_files_indicator(input_path):
-      #tell u what we have found 
-  audio_files = mp3_path_outputer(input_path)
-  if audio_files:
-       print(f"\033[32m[Audio files found]\033[0m {audio_files}")
-       return True
-  else:
-        print("\033[34m[No audio files found]\033[0m Script will skip audio xverify process")
-        return False
-def process_audio(input_path):
-    # get file & apply default model
-    file_path= mp3_path_outputer(input_path)
-    model = whisper.load_model("base")
-
-    # load audio and pad/trim it to fit 30 seconds
-    audio = whisper.load_audio(file_path)
-    audio = whisper.pad_or_trim(audio)
-
-    # make log-Mel spectrogram and move to the same device as the model
-    mel = whisper.log_mel_spectrogram(audio).to(model.device)
-
-    # detect the spoken language
-    _, probs = model.detect_language(mel)
-    print(f"\033[34m[Detected language]\033[0m {max(probs, key=probs.get)}")
-    print(max(probs, key=probs.get))
-
-    # switch to English specific model if so
-    if max(probs, key=probs.get) == "en":
-        model = whisper.load_model("base.en") 
-
-    # decode the audio
-    options = whisper.DecodingOptions()
-    result = whisper.decode(model, mel, options)
-
-    # return the recognized text
-    return result.text 
 def process_document(input_path, output_path):
     ###find the file path
     file_path = docx_path_outputer(input_path)  
@@ -215,13 +155,8 @@ def process_document(input_path, output_path):
 inout_folder_exists(input_path,output_path)
 ##indicate the file that have been found
 docx_files_indicator(input_path)
-audio_xverify=audio_files_indicator(input_path)
 ##count for progress bar
-audio_length = audio_length_counter(input_path)
 total_paragraphs = progress_bar_counter(input_path)
-#use whisper to process audio&skip if file dosen't exist
-if audio_xverify:
-    process_audio(input_path)
 ##choose model
 LLm_model = ollama_list()
 ##process files
